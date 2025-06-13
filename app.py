@@ -1,6 +1,8 @@
 import os
 import uuid
 import threading
+import psutil
+import platform
 from queue import Queue
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO, emit, join_room
@@ -21,14 +23,6 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', config.SECRET_KEY)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Configuration
-UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
-PROCESSED_FOLDER = os.getenv('PROCESSED_FOLDER', 'processed')
-ALLOWED_EXTENSIONS = set(config.ALLOWED_EXTENSIONS)
-MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', config.MAX_FILE_SIZE_MB * 1024 * 1024))
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
 PROCESSED_FOLDER = os.getenv('PROCESSED_FOLDER', 'processed')
 ALLOWED_EXTENSIONS = set(config.ALLOWED_EXTENSIONS)
@@ -144,19 +138,31 @@ def process_video_worker():
             
             socketio.emit('processing_update', processing_status[task_id], room=task_id)
             
-            # Clean up input file
+            # Clean up input file on success
             if os.path.exists(input_path):
-                os.remove(input_path)
+                try:
+                    os.remove(input_path)
+                except OSError as e:
+                    print(f"Warning: Could not remove input file {input_path}: {e}")
                 
         except Exception as e:
+            print(f"❌ Error processing task {task.get('id', 'unknown')}: {e}")
             if 'task_id' in locals():
                 processing_status[task_id] = {
                     'task_id': task_id,
                     'status': 'error',
                     'progress': 0,
-                    'message': f'Error: {str(e)}'
+                    'message': f'Processing failed: {str(e)}'
                 }
                 socketio.emit('processing_update', processing_status[task_id], room=task_id)
+                
+                # Clean up files on error
+                for path in [input_path, output_path]:
+                    if 'path' in locals() and os.path.exists(path):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
         finally:
             processing_queue.task_done()
 
@@ -178,64 +184,106 @@ def upload_file():
     
     files = request.files.getlist('files')
     watermark_text = request.form.get('watermark_text', '')
-    strength = float(request.form.get('strength', config.DEFAULT_STRENGTH))
+    
+    # Validate watermark text
+    if not watermark_text.strip():
+        return jsonify({'error': 'Watermark text cannot be empty'}), 400
     
     if len(watermark_text) > config.MAX_WATERMARK_LENGTH:
         return jsonify({'error': f'Watermark text too long (max {config.MAX_WATERMARK_LENGTH} characters)'}), 400
+    
+    # Validate and parse strength
+    try:
+        strength = float(request.form.get('strength', config.DEFAULT_STRENGTH))
+        if not (config.MIN_STRENGTH <= strength <= config.MAX_STRENGTH):
+            return jsonify({'error': f'Strength must be between {config.MIN_STRENGTH} and {config.MAX_STRENGTH}'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid strength value'}), 400
     
     if not files or all(file.filename == '' for file in files):
         return jsonify({'error': 'No files selected'}), 400
     
     uploaded_files = []
+    errors = []
     
     for file in files:
-        if file and allowed_file(file.filename):
-            # Generate unique task ID
-            task_id = str(uuid.uuid4())
-            
-            # Secure filename
-            original_filename = secure_filename(file.filename)
-            filename = f"{task_id}_{original_filename}"
-            
-            # Save uploaded file
-            input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(input_path)
-            
-            # Prepare output path
-            name, ext = os.path.splitext(original_filename)
-            output_filename = f"{task_id}_watermarked_{name}{ext}"
-            output_path = os.path.join(app.config['PROCESSED_FOLDER'], output_filename)
-            
-            # Add to processing queue
-            task = {
-                'id': task_id,
-                'input_path': input_path,
-                'output_path': output_path,
-                'watermark_text': watermark_text,
-                'strength': strength,
-                'original_filename': original_filename
-            }
-            
-            print(f"🔄 Adding task to queue: {task_id}")
-            processing_queue.put(task)
-            print(f"📊 Queue size: {processing_queue.qsize()}")
-            
-            # Initialize status
-            processing_status[task_id] = {
-                'status': 'queued',
-                'progress': 0,
-                'message': 'Queued for processing...'
-            }
-            
-            uploaded_files.append({
-                'task_id': task_id,
-                'filename': original_filename
-            })
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                errors.append(f'{file.filename}: File type not supported')
+                continue
+                
+            try:
+                # Generate unique task ID
+                task_id = str(uuid.uuid4())
+                
+                # Secure filename
+                original_filename = secure_filename(file.filename)
+                if not original_filename:
+                    errors.append(f'{file.filename}: Invalid filename')
+                    continue
+                    
+                filename = f"{task_id}_{original_filename}"
+                
+                # Save uploaded file
+                input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(input_path)
+                
+                # Validate video file
+                processor = VideoProcessor()
+                if not processor.validate_video_file(input_path):
+                    os.remove(input_path)  # Clean up invalid file
+                    errors.append(f'{original_filename}: Invalid or corrupted video file')
+                    continue
+                
+                # Prepare output path
+                name, ext = os.path.splitext(original_filename)
+                output_filename = f"{task_id}_watermarked_{name}{ext}"
+                output_path = os.path.join(app.config['PROCESSED_FOLDER'], output_filename)
+                
+                # Add to processing queue
+                task = {
+                    'id': task_id,
+                    'input_path': input_path,
+                    'output_path': output_path,
+                    'watermark_text': watermark_text,
+                    'strength': strength,
+                    'original_filename': original_filename
+                }
+                
+                print(f"🔄 Adding task to queue: {task_id}")
+                processing_queue.put(task)
+                print(f"📊 Queue size: {processing_queue.qsize()}")
+                
+                # Initialize status
+                processing_status[task_id] = {
+                    'task_id': task_id,
+                    'status': 'queued',
+                    'progress': 0,
+                    'message': 'Queued for processing...'
+                }
+                
+                uploaded_files.append({
+                    'task_id': task_id,
+                    'filename': original_filename
+                })
+                
+            except Exception as e:
+                errors.append(f'{file.filename}: Upload failed - {str(e)}')
+                # Clean up any partially created files
+                if 'input_path' in locals() and os.path.exists(input_path):
+                    os.remove(input_path)
     
-    return jsonify({
+    response = {
         'message': f'Successfully uploaded {len(uploaded_files)} file(s)',
         'files': uploaded_files
-    })
+    }
+    
+    if errors:
+        response['errors'] = errors
+        response['message'] += f' ({len(errors)} failed)'
+    
+    status_code = 200 if uploaded_files else 400
+    return jsonify(response), status_code
 
 @app.route('/status/<task_id>')
 def get_status(task_id):
@@ -301,8 +349,6 @@ def get_queue_status():
 @app.route('/system/info')
 def get_system_info():
     """Get system information for monitoring"""
-    import psutil
-    import platform
     
     try:
         cpu_percent = psutil.cpu_percent(interval=1)
