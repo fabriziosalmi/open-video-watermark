@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Video Watermark</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-top">
+                    <div class="logo-section">
+                        <h1><i class="fas fa-video"></i> Open Video Watermark</h1>
+                        <p>Robust video watermarking with DCT frequency-domain embedding</p>
+                    </div>
+                    <div class="header-controls">
+                        <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
+                            <i class="fas fa-moon" id="theme-icon"></i>
+                        </button>
+                        <button id="help-tour" class="help-button" title="Start guided tour">
+                            <i class="fas fa-question-circle"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="tab-button active" data-tab="embed">
+                <i class="fas fa-plus-circle"></i> Embed Watermark
+            </button>
+            <button class="tab-button" data-tab="manage">
+                <i class="fas fa-folder-open"></i> Manage Files
+            </button>
+        </nav>
+
+        <!-- Embed Watermark Tab -->
+        <div id="embed-tab" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-upload"></i> Upload Videos</h2>
+                </div>
+                <div class="card-body">
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="form-group" data-tour="file-upload">
+                            <label for="files">
+                                <i class="fas fa-upload"></i>
+                                Select Video Files:
+                                <span class="tooltip-trigger" data-tooltip="Choose one or more video files to watermark. Supported formats: MP4, AVI, MOV, MKV, WebM, FLV, WMV">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <div class="file-input-wrapper">
+                                <input type="file" id="files" name="files" multiple accept="video/*" required>
+                                <div class="file-input-display">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <span>Choose video files or drag and drop</span>
+                                </div>
+                            </div>
+                            <div class="file-list" id="file-list"></div>
+                        </div>
+
+                        <div class="form-group" data-tour="watermark-text">
+                            <label for="watermark-text">
+                                <i class="fas fa-font"></i>
+                                Watermark Text:
+                                <span class="tooltip-trigger" data-tooltip="Enter the text that will be embedded as a watermark in your videos. Maximum 50 characters.">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <input type="text" id="watermark-text" name="watermark_text" 
+                                   placeholder="Enter your watermark text" required maxlength="50"
+                                   data-tooltip="This text will be invisibly embedded in your video">
+                            <div class="input-feedback">
+                                <small><span id="char-count">0</span>/50 characters</small>
+                            </div>
+                            <div class="watermark-preview" id="watermark-preview">
+                                <div class="preview-label">Preview:</div>
+                                <div class="preview-text" id="preview-text">Your watermark will appear here</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" data-tour="strength">
+                            <label for="strength">
+                                <i class="fas fa-sliders-h"></i>
+                                Embedding Strength:
+                                <span class="tooltip-trigger" data-tooltip="Controls how strongly the watermark is embedded. Lower values are more invisible but less robust.">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                            </label>
+                            <div class="strength-control">
+                                <input type="range" id="strength" name="strength" 
+                                       min="0.05" max="0.3" step="0.05" value="0.1"
+                                       data-tooltip="Adjust the balance between invisibility and robustness">
+                                <span class="strength-value">0.1</span>
+                            </div>
+                            <small>Lower values = more invisible, Higher values = more robust</small>
+                            <div class="strength-indicator">
+                                <div class="indicator-item">
+                                    <span class="indicator-dot weak"></span>
+                                    <span>Invisible</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-dot balanced"></span>
+                                    <span>Balanced</span>
+                                </div>
+                                <div class="indicator-item">
+                                    <span class="indicator-dot strong"></span>
+                                    <span>Robust</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="processing-options-header">
+                                <label>
+                                    <i class="fas fa-cogs"></i> Processing Options
+                                </label>
+                                <button type="button" class="toggle-btn" id="toggle-processing-options">
+                                    <span class="toggle-text">Show Advanced Options</span>
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="processing-options-content" id="processing-options-content">
+                                <div class="options-grid">
+                                    <div class="option-card">
+                                        <div class="option-header">
+                                            <i class="fas fa-video"></i>
+                                            <h4>Video Quality</h4>
+                                        </div>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="preserve-quality" checked>
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Preserve original quality</span>
+                                                    <small>Maintains video resolution and bitrate</small>
+                                                </div>
+                                            </label>
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="optimize-size">
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Optimize file size</span>
+                                                    <small>Reduce file size while maintaining quality</small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="option-card">
+                                        <div class="option-header">
+                                            <i class="fas fa-layer-group"></i>
+                                            <h4>Processing Mode</h4>
+                                        </div>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="batch-processing">
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Batch processing</span>
+                                                    <small>Process multiple files simultaneously</small>
+                                                </div>
+                                            </label>
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="background-processing">
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Background processing</span>
+                                                    <small>Continue processing in background</small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="option-card">
+                                        <div class="option-header">
+                                            <i class="fas fa-shield-alt"></i>
+                                            <h4>Security & Output</h4>
+                                        </div>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="auto-delete" checked>
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Auto-delete originals</span>
+                                                    <small>Remove uploaded files after processing</small>
+                                                </div>
+                                            </label>
+                                            <label class="checkbox-item">
+                                                <input type="checkbox" id="generate-preview">
+                                                <span class="checkmark"></span>
+                                                <div class="option-details">
+                                                    <span>Generate preview</span>
+                                                    <small>Create preview clips for verification</small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="output-settings">
+                                    <h4><i class="fas fa-download"></i> Output Settings</h4>
+                                    <div class="settings-row">
+                                        <div class="setting-item">
+                                            <label for="output-format">Output Format:</label>
+                                            <select id="output-format" name="output_format">
+                                                <option value="same">Same as input</option>
+                                                <option value="mp4">MP4 (H.264)</option>
+                                                <option value="webm">WebM (VP9)</option>
+                                                <option value="avi">AVI</option>
+                                            </select>
+                                        </div>
+                                        <div class="setting-item">
+                                            <label for="compression-level">Compression:</label>
+                                            <select id="compression-level" name="compression_level">
+                                                <option value="none">None (Lossless)</option>
+                                                <option value="low">Low</option>
+                                                <option value="medium" selected>Medium</option>
+                                                <option value="high">High</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-magic"></i> Start Processing
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Processing Status -->
+            <div id="processing-status" class="processing-container" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-cogs"></i> Processing Status</h2>
+                    </div>
+                    <div class="card-body">
+                        <div id="processing-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage Files Tab -->
+        <div id="manage-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-list"></i> Processed Files</h2>
+                    <button id="refresh-files" class="btn btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="files-list" class="files-container">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i> Loading files...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Welcome Tour Modal -->
+    <div id="welcome-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-rocket"></i> Welcome to Open Video Watermark!</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="welcome-content">
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <i class="fas fa-upload"></i>
+                            <h3>Upload Videos</h3>
+                            <p>Drag and drop or select multiple video files to watermark</p>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <h3>Invisible Protection</h3>
+                            <p>DCT-based watermarking that's robust yet invisible</p>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-cogs"></i>
+                            <h3>Advanced Options</h3>
+                            <p>Customize processing settings for your needs</p>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-download"></i>
+                            <h3>Download Results</h3>
+                            <p>Get your watermarked videos with full quality</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="skip-tour">Skip Tour</button>
+                <button class="btn btn-primary" id="start-tour">Start Guided Tour</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip Container -->
+    <div id="tooltip" class="tooltip" style="display: none;">
+        <div class="tooltip-content"></div>
+        <div class="tooltip-arrow"></div>
+    </div>
+
+    <!-- Tour Overlay -->
+    <div id="tour-overlay" class="tour-overlay" style="display: none;">
+        <div class="tour-spotlight"></div>
+        <div class="tour-popup">
+            <div class="tour-content">
+                <h3 id="tour-title"></h3>
+                <p id="tour-description"></p>
+            </div>
+            <div class="tour-navigation">
+                <button class="btn btn-secondary" id="tour-prev">Previous</button>
+                <span class="tour-progress">
+                    <span id="tour-current">1</span> of <span id="tour-total">5</span>
+                </span>
+                <button class="btn btn-primary" id="tour-next">Next</button>
+                <button class="btn btn-ghost" id="tour-skip">Skip Tour</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

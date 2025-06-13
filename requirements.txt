@@ -1,0 +1,25 @@
+# Core web framework
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+python-socketio[client]==5.8.0
+python-engineio==4.7.1
+Werkzeug==2.3.7
+
+# Video processing
+opencv-python==4.8.1.78
+numpy>=1.21.0,<2.0.0
+Pillow>=9.0.0
+
+# Environment and utilities
+python-dotenv==1.0.0
+
+# Production server options
+gevent==23.9.1
+gevent-websocket==0.10.1
+gunicorn==21.2.0
+
+# Development and testing (optional)
+pytest==7.4.2
+pytest-cov==4.1.0
+black==23.9.1
+flake8==6.1.0
