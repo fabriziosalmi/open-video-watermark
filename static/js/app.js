@@ -954,11 +954,11 @@ class VideoWatermarkApp {
                 const count = e.target.value.length;
                 charCount.textContent = count;
                 
-                // Change color based on usage
-                if (count > 40) {
-                    charCount.style.color = 'var(--warning-color)';
-                } else if (count > 45) {
+                // Change color based on usage - fixed logic order
+                if (count > 45) {
                     charCount.style.color = 'var(--error-color)';
+                } else if (count > 40) {
+                    charCount.style.color = 'var(--warning-color)';
                 } else {
                     charCount.style.color = 'var(--primary-color)';
                 }

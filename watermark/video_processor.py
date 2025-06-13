@@ -1,7 +1,10 @@
 import cv2
 import numpy as np
 import os
+import logging
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 class VideoProcessor:
     """
@@ -14,20 +17,26 @@ class VideoProcessor:
     
     def get_video_info(self, video_path):
         """Get basic information about a video file"""
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
+        try:
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                logger.error(f"Could not open video file: {video_path}")
+                return None
+            
+            info = {
+                'frame_count': int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                'fps': cap.get(cv2.CAP_PROP_FPS),
+                'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                'codec': int(cap.get(cv2.CAP_PROP_FOURCC))
+            }
+            
+            cap.release()
+            logger.debug(f"Video info for {video_path}: {info}")
+            return info
+        except Exception as e:
+            logger.error(f"Error getting video info for {video_path}: {e}")
             return None
-        
-        info = {
-            'frame_count': int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
-            'fps': cap.get(cv2.CAP_PROP_FPS),
-            'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            'codec': int(cap.get(cv2.CAP_PROP_FOURCC))
-        }
-        
-        cap.release()
-        return info
     
     def embed_watermark_in_video(self, input_path, output_path, watermark_text, 
                                 strength, watermarker, progress_callback: Optional[Callable] = None):
@@ -83,7 +92,7 @@ class VideoProcessor:
                     watermarked_frame = watermarker.embed_watermark(frame, watermark_text, strength)
                     out.write(watermarked_frame)
                 except Exception as e:
-                    print(f"Error processing frame {frame_count}: {e}")
+                    logger.warning(f"Error processing frame {frame_count}: {e}")
                     # Write original frame if watermarking fails
                     out.write(frame)
                 
@@ -97,12 +106,14 @@ class VideoProcessor:
             
             # Verify output file was created and has content
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                logger.info(f"Video processing completed successfully: {output_path}")
                 return True
             else:
+                logger.error(f"Output video file is empty or missing: {output_path}")
                 return False
                 
         except Exception as e:
-            print(f"Error processing video: {e}")
+            logger.error(f"Error processing video {input_path}: {e}", exc_info=True)
             return False
     
     def extract_watermark_from_video(self, video_path, watermark_length, watermarker, 

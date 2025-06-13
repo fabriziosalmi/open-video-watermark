@@ -3,6 +3,8 @@ import uuid
 import threading
 import psutil
 import platform
+import logging
+import magic
 from queue import Queue
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO, emit, join_room
@@ -18,9 +20,31 @@ import config
 # Load environment variables
 load_dotenv()
 
+# Setup logging
+def setup_logging():
+    """Setup logging configuration"""
+    log_dir = os.path.dirname(config.LOG_FILE)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    
+    logging.basicConfig(
+        level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(config.LOG_FILE),
+            logging.StreamHandler()
+        ]
+    )
+
+setup_logging()
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', config.SECRET_KEY)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+app.config['SECRET_KEY'] = config.SECRET_KEY
+
+# Setup CORS origins
+cors_origins = config.CORS_ORIGINS.split(',') if config.CORS_ORIGINS != '*' else "*"
+socketio = SocketIO(app, cors_allowed_origins=cors_origins, async_mode='threading')
 
 # Configuration
 UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
@@ -42,7 +66,34 @@ processing_status = {}
 file_registry = {}
 
 def allowed_file(filename):
+    """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_file_magic(file_path):
+    """Validate file using magic numbers (MIME type detection)"""
+    try:
+        mime = magic.from_file(file_path, mime=True)
+        logger.info(f"Detected MIME type: {mime} for file: {file_path}")
+        
+        # Video MIME types
+        allowed_video_mimes = [
+            'video/mp4',
+            'video/avi', 
+            'video/x-msvideo',
+            'video/quicktime',
+            'video/x-matroska',
+            'video/x-ms-wmv',
+            'video/x-flv',
+            'video/webm'
+        ]
+        
+        return mime in allowed_video_mimes
+    except ImportError:
+        logger.warning("python-magic not available, falling back to extension-only validation")
+        return True  # Fallback to extension validation only
+    except Exception as e:
+        logger.error(f"Error validating file magic: {e}")
+        return False
 
 def load_file_registry():
     """Load file registry from disk"""
@@ -63,14 +114,14 @@ def save_file_registry():
 
 def process_video_worker():
     """Background worker for processing videos"""
-    print("🔧 Background worker started")
+    logger.info("🔧 Background worker started")
     while True:
         try:
-            print("⏳ Waiting for tasks...")
+            logger.debug("⏳ Waiting for tasks...")
             task = processing_queue.get()
             if task is None:
                 break
-            print(f"📋 Processing task: {task['id']}")
+            logger.info(f"📋 Processing task: {task['id']}")
             
             task_id = task['id']
             input_path = task['input_path']
@@ -103,12 +154,14 @@ def process_video_worker():
                 socketio.emit('processing_update', processing_status[task_id], room=task_id)
             
             # Process video
+            logger.info(f"Starting video processing for task {task_id}: {original_filename}")
             success = processor.embed_watermark_in_video(
                 input_path, output_path, watermark_text, strength, 
                 watermarker, progress_callback
             )
             
             if success:
+                logger.info(f"Video processing completed successfully for task {task_id}")
                 # Update file registry
                 file_info = {
                     'id': task_id,
@@ -129,6 +182,7 @@ def process_video_worker():
                     'message': 'Processing completed successfully!'
                 }
             else:
+                logger.error(f"Video processing failed for task {task_id}")
                 processing_status[task_id] = {
                     'task_id': task_id,
                     'status': 'error',
@@ -142,11 +196,12 @@ def process_video_worker():
             if os.path.exists(input_path):
                 try:
                     os.remove(input_path)
+                    logger.debug(f"Cleaned up input file: {input_path}")
                 except OSError as e:
-                    print(f"Warning: Could not remove input file {input_path}: {e}")
+                    logger.warning(f"Could not remove input file {input_path}: {e}")
                 
         except Exception as e:
-            print(f"❌ Error processing task {task.get('id', 'unknown')}: {e}")
+            logger.error(f"❌ Error processing task {task.get('id', 'unknown')}: {e}", exc_info=True)
             if 'task_id' in locals():
                 processing_status[task_id] = {
                     'task_id': task_id,
@@ -161,6 +216,7 @@ def process_video_worker():
                     if 'path' in locals() and os.path.exists(path):
                         try:
                             os.remove(path)
+                            logger.debug(f"Cleaned up file on error: {path}")
                         except OSError:
                             pass
         finally:
@@ -228,11 +284,19 @@ def upload_file():
                 input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(input_path)
                 
-                # Validate video file
+                # Validate file using magic numbers
+                if not validate_file_magic(input_path):
+                    os.remove(input_path)
+                    errors.append(f'{original_filename}: Invalid video file format (magic number check failed)')
+                    logger.warning(f"Magic number validation failed for file: {original_filename}")
+                    continue
+                
+                # Validate video file with OpenCV
                 processor = VideoProcessor()
                 if not processor.validate_video_file(input_path):
                     os.remove(input_path)  # Clean up invalid file
                     errors.append(f'{original_filename}: Invalid or corrupted video file')
+                    logger.warning(f"OpenCV validation failed for file: {original_filename}")
                     continue
                 
                 # Prepare output path
@@ -251,8 +315,10 @@ def upload_file():
                 }
                 
                 print(f"🔄 Adding task to queue: {task_id}")
+                logger.info(f"Adding task to processing queue: {task_id} - {original_filename}")
                 processing_queue.put(task)
                 print(f"📊 Queue size: {processing_queue.qsize()}")
+                logger.debug(f"Current queue size: {processing_queue.qsize()}")
                 
                 # Initialize status
                 processing_status[task_id] = {
@@ -268,6 +334,7 @@ def upload_file():
                 })
                 
             except Exception as e:
+                logger.error(f"Error uploading file {file.filename}: {e}", exc_info=True)
                 errors.append(f'{file.filename}: Upload failed - {str(e)}')
                 # Clean up any partially created files
                 if 'input_path' in locals() and os.path.exists(input_path):
@@ -413,6 +480,15 @@ def handle_join_task(data):
         emit('processing_update', processing_status[task_id])
 
 if __name__ == '__main__':
+    logger.info(f"🎬 Starting {config.APP_NAME} v{config.VERSION}")
+    logger.info(f"📊 Server running on http://{config.HOST}:{config.PORT}")
+    logger.info(f"📁 Upload folder: {UPLOAD_FOLDER}")
+    logger.info(f"📁 Processed folder: {PROCESSED_FOLDER}")
+    logger.info(f"📏 Max file size: {MAX_CONTENT_LENGTH // (1024*1024)}MB")
+    logger.info(f"🔒 CORS origins: {cors_origins}")
+    logger.info(f"📝 Log level: {config.LOG_LEVEL}")
+    logger.info("🚀 Ready to process videos!")
+    
     print(f"🎬 Starting {config.APP_NAME} v{config.VERSION}")
     print(f"📊 Server running on http://{config.HOST}:{config.PORT}")
     print(f"📁 Upload folder: {UPLOAD_FOLDER}")

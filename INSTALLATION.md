@@ -78,6 +78,78 @@ python app.py
 - **Minimum 4GB RAM** (for video processing)
 - **Storage space** for uploaded and processed videos
 
+## 🔐 Security Configuration
+
+### Environment Variables
+
+Before running the application, especially in production, you must configure environment variables:
+
+1. **Copy the environment template**:
+```bash
+cp .env.example .env
+```
+
+2. **Generate a secure secret key**:
+```bash
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))" >> .env
+```
+
+3. **Edit the .env file** and update these critical settings:
+```bash
+# Security - REQUIRED for production
+SECRET_KEY=your-generated-secret-key-here
+DEBUG=false
+CORS_ORIGINS=https://yourdomain.com  # Replace * with actual domains
+
+# File paths (use absolute paths for production)
+UPLOAD_FOLDER=/app/uploads
+PROCESSED_FOLDER=/app/processed
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=logs/app.log
+```
+
+### File Validation
+
+The application now includes multiple layers of file validation:
+- **Extension checking**: Validates file extensions
+- **Magic number validation**: Uses python-magic to verify file types
+- **OpenCV validation**: Ensures files are readable video formats
+
+Install system dependencies for magic number detection:
+
+**Ubuntu/Debian**:
+```bash
+sudo apt-get install libmagic1
+```
+
+**macOS**:
+```bash
+brew install libmagic
+```
+
+**CentOS/RHEL**:
+```bash
+sudo yum install file-devel
+```
+
+## 📝 Logging
+
+The application now includes comprehensive logging:
+
+- **Console logging**: Real-time feedback during development
+- **File logging**: Persistent logs in `logs/app.log`
+- **Structured logging**: Includes timestamps, log levels, and context
+- **Error tracking**: Full stack traces for debugging
+
+Log levels available: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+
+View logs in real-time:
+```bash
+tail -f logs/app.log
+```
+
 ## 🚀 Usage
 
 ### Starting the Application
@@ -231,6 +303,27 @@ open-video-watermark/
 
 ### Common Issues
 
+**Environment Configuration**:
+```bash
+# Missing .env file
+cp .env.example .env
+# Edit .env with your settings
+```
+
+**python-magic Installation Problems**:
+```bash
+# Ubuntu/Debian
+sudo apt-get install libmagic1 python3-magic
+pip install python-magic
+
+# macOS
+brew install libmagic
+pip install python-magic
+
+# If still having issues, try:
+pip install python-magic-bin
+```
+
 **OpenCV Installation Problems**:
 ```bash
 pip install --upgrade pip
@@ -241,11 +334,25 @@ pip install opencv-python-headless
 ```bash
 chmod +x run.sh
 sudo chown -R $USER:$USER .
+# Create log directory
+mkdir -p logs
+chmod 755 logs
 ```
+
+**CORS Issues**:
+- Update `CORS_ORIGINS` in .env file
+- For development: `CORS_ORIGINS=*`  
+- For production: `CORS_ORIGINS=https://yourdomain.com`
+
+**File Upload Failures**:
+- Check file format is supported (mp4, avi, mov, mkv, wmv, flv, webm)
+- Verify file is not corrupted
+- Check `MAX_FILE_SIZE_MB` setting
+- Review logs: `tail -f logs/app.log`
 
 **Port Already in Use**:
 - Change `PORT` in `.env` file
-- Or kill existing process: `lsof -ti:5000 | xargs kill`
+- Or kill existing process: `lsof -ti:8000 | xargs kill`
 
 **Large File Upload Issues**:
 - Check `MAX_CONTENT_LENGTH` setting
@@ -256,7 +363,26 @@ sudo chown -R $USER:$USER .
 
 Enable detailed logging:
 ```bash
-DEBUG=True python app.py
+# In .env file
+DEBUG=True
+LOG_LEVEL=DEBUG
+
+# Then restart the application
+python app.py
+```
+
+### Checking Logs
+
+View application logs:
+```bash
+# Real-time log monitoring
+tail -f logs/app.log
+
+# View recent errors
+grep ERROR logs/app.log | tail -20
+
+# View all logs from today
+grep "$(date +%Y-%m-%d)" logs/app.log
 ```
 
 ### Performance Optimization
