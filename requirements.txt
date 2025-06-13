@@ -16,7 +16,7 @@ python-dotenv==1.0.0
 # Production server options
 gevent==23.9.1
 gevent-websocket==0.10.1
-gunicorn==21.2.0
+gunicorn==23.0.0
 
 # Development and testing (optional)
 pytest==7.4.2
