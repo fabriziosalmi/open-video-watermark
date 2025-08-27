@@ -10,7 +10,8 @@ A robust, professional video watermarking web application that embeds invisible 
 ## ✨ Features
 
 ### Core Functionality
-- **🔒 Invisible Watermarking**: Uses DCT (Discrete Cosine Transform) for robust frequency-domain watermarking
+- **🔒 Invisible Watermarking**: Uses DCT (Discrete Cosine Transform) for robust frequency-domain watermarking (enhanced robustness in v1.0.0)
+- **🧪 Watermark Extraction**: Extract embedded watermarks from processed videos via API
 - **🌐 Modern Web Interface**: Clean, responsive single-page application with intuitive design
 - **⚡ Real-time Progress**: Live updates on video processing with WebSocket communication
 - **🔄 Background Processing**: Queue-based video processing to prevent UI blocking
@@ -20,7 +21,10 @@ A robust, professional video watermarking web application that embeds invisible 
 ### Advanced Features
 - **🎛️ Processing Options**: Customizable watermark strength and advanced settings
 - **📊 Progress Tracking**: Detailed progress bars with frame-by-frame updates
-- **🔐 Security**: Rate limiting, input validation, and secure file handling
+- **🧰 Video Validation**: Comprehensive validation endpoint to preflight-check video files
+- **📈 Metrics & Monitoring**: Application metrics endpoint and system info for observability
+- **🧵 Batch & Queue**: Batch status endpoint for multi-file operations
+- **🔐 Security**: Rate limiting, input validation, secure headers, and safe file handling
 - **🐳 Docker Ready**: Full containerization with Docker Compose support
 - **🚀 Production Ready**: Nginx reverse proxy configuration included
 - **📱 Mobile Responsive**: Works seamlessly on desktop and mobile devices
@@ -191,6 +195,23 @@ make clean       # Clean Docker resources
 
 ### Testing
 
+New comprehensive tests are included for v1.0.0.
+
+- Run all tests:
+```bash
+make test
+```
+
+- Run the comprehensive suite directly:
+```bash
+pytest -q tests/test_comprehensive.py
+```
+
+- With coverage:
+```bash
+pytest --cov=watermark tests/
+```
+
 ```bash
 # Run tests
 make test
@@ -237,9 +258,10 @@ open-video-watermark/
 
 - **Framework**: Flask 2.3.3 with SocketIO for real-time communication
 - **Video Processing**: OpenCV 4.8.1 for frame manipulation
-- **Watermarking**: Custom DCT-based frequency-domain embedding
+- **Watermarking**: Enhanced DCT-based frequency-domain embedding with redundancy and improved robustness
 - **Queue System**: Threading-based background processing
 - **File Handling**: Secure upload/download with validation
+- **APIs**: New endpoints for extraction, validation, metrics, and batch status
 
 ### Frontend Technology
 
@@ -252,10 +274,12 @@ open-video-watermark/
 
 - Input validation and sanitization
 - Secure filename handling
-- Rate limiting (with Nginx)
-- CSRF protection
-- Content-Type validation
+- Rate limiting (application-level and via Nginx)
+- Security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy)
+- Content-Type validation (magic number checks)
 - File size limits
+
+See SECURITY.md and the new security middleware in security.py.
 
 ### Performance Optimizations
 
@@ -268,6 +292,11 @@ open-video-watermark/
 ## 🔐 Security Considerations
 
 ### For Production Deployment
+
+- Set a strong SECRET_KEY and RATE_LIMIT_SALT in your environment.
+- Consider setting CORS_ORIGINS to a restricted list.
+- Run behind a reverse proxy with SSL/TLS.
+- Review API.md for endpoint rate limits and expected payloads.
 
 1. **Change default secret key**:
 ```bash
@@ -349,6 +378,36 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: [GitHub Issues](https://github.com/fabriziosalmi/open-video-watermark/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/fabriziosalmi/open-video-watermark/discussions)
 - **Security**: Report security issues privately via email
+
+## 📡 API Overview
+
+A full API reference with examples is available in API.md.
+
+Quick examples:
+
+- Extract watermark from a video:
+```bash
+curl -X POST http://localhost:8000/extract \
+  -F "file=@watermarked_video.mp4" \
+  -F "watermark_length=15"
+```
+
+- Validate a video file:
+```bash
+curl -X POST http://localhost:8000/validate \
+  -F "file=@video.mp4"
+```
+
+- Estimate processing time:
+```bash
+curl -X POST http://localhost:8000/estimate-time \
+  -F "file=@video.mp4" \
+  -F "watermark_text=My Watermark"
+```
+
+## 📝 Changelog
+
+See CHANGELOG.md for a detailed list of changes. Latest release: v1.0.0.
 
 ---
 
