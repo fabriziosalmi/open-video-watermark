@@ -17,6 +17,9 @@ psutil==5.9.5
 python-dotenv==1.0.0
 python-magic==0.4.27
 
+# Video downloading
+yt-dlp==2023.12.30
+
 # Production server options
 gevent==23.9.1
 gevent-websocket==0.10.1

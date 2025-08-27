@@ -16,6 +16,10 @@ from dotenv import load_dotenv
 from watermark.dct_watermark import DCTWatermark
 from watermark.video_processor import VideoProcessor
 import config
+from security import (
+    setup_security_middleware, rate_limit, secure_endpoint,
+    validate_video_upload, validate_watermark_text, validate_strength_parameter
+)
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +45,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.SECRET_KEY
+
+# Setup security middleware
+setup_security_middleware(app)
 
 # Setup CORS origins
 cors_origins = config.CORS_ORIGINS.split(',') if config.CORS_ORIGINS != '*' else "*"
@@ -234,6 +241,8 @@ def index():
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
+@rate_limit(limit=10, window=60)  # 10 uploads per minute
+@secure_endpoint
 def upload_file():
     if 'files' not in request.files:
         return jsonify({'error': 'No files selected'}), 400
@@ -461,6 +470,214 @@ def health_check():
         'version': config.VERSION,
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/extract', methods=['POST'])
+@rate_limit(limit=5, window=60)  # 5 extractions per minute
+@secure_endpoint
+def extract_watermark():
+    """Extract watermark from uploaded video"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    watermark_length = int(request.form.get('watermark_length', 20))
+    
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'File type not supported'}), 400
+    
+    try:
+        # Generate unique filename
+        extract_id = str(uuid.uuid4())
+        filename = f"{extract_id}_{secure_filename(file.filename)}"
+        
+        # Save uploaded file temporarily
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(temp_path)
+        
+        # Validate video file
+        processor = VideoProcessor()
+        if not processor.validate_video_file(temp_path):
+            os.remove(temp_path)
+            return jsonify({'error': 'Invalid video file'}), 400
+        
+        # Extract watermark
+        watermarker = DCTWatermark()
+        extracted_text = processor.extract_watermark_from_video(
+            temp_path, watermark_length, watermarker
+        )
+        
+        # Clean up temporary file
+        os.remove(temp_path)
+        
+        if extracted_text:
+            return jsonify({
+                'success': True,
+                'extracted_watermark': extracted_text,
+                'confidence': 'medium'  # Could implement actual confidence scoring
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No watermark detected or extraction failed'
+            })
+    
+    except Exception as e:
+        logger.error(f"Error extracting watermark: {e}", exc_info=True)
+        # Clean up on error
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+        return jsonify({'error': f'Extraction failed: {str(e)}'}), 500
+
+@app.route('/validate', methods=['POST'])
+@rate_limit(limit=20, window=60)  # 20 validations per minute
+@secure_endpoint
+def validate_video():
+    """Comprehensive video validation endpoint"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Save file temporarily for validation
+        temp_id = str(uuid.uuid4())
+        filename = f"validate_{temp_id}_{secure_filename(file.filename)}"
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(temp_path)
+        
+        # Perform comprehensive validation
+        processor = VideoProcessor()
+        validation_result = processor.validate_video_comprehensive(temp_path)
+        
+        # Clean up temporary file
+        os.remove(temp_path)
+        
+        return jsonify(validation_result)
+    
+    except Exception as e:
+        logger.error(f"Error validating video: {e}", exc_info=True)
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+        return jsonify({'error': f'Validation failed: {str(e)}'}), 500
+
+@app.route('/estimate-time', methods=['POST'])
+@rate_limit(limit=30, window=60)  # 30 estimates per minute
+def estimate_processing_time():
+    """Estimate processing time for video watermarking"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    watermark_text = request.form.get('watermark_text', 'Sample')
+    
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Save file temporarily for analysis
+        temp_id = str(uuid.uuid4())
+        filename = f"estimate_{temp_id}_{secure_filename(file.filename)}"
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(temp_path)
+        
+        # Get processing time estimate
+        processor = VideoProcessor()
+        estimate = processor.estimate_processing_time(temp_path, watermark_text)
+        
+        # Get video info for additional context
+        video_info = processor.get_video_info(temp_path)
+        
+        # Clean up temporary file
+        os.remove(temp_path)
+        
+        return jsonify({
+            'estimate': estimate,
+            'video_info': video_info
+        })
+    
+    except Exception as e:
+        logger.error(f"Error estimating processing time: {e}", exc_info=True)
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
+        return jsonify({'error': f'Estimation failed: {str(e)}'}), 500
+
+@app.route('/batch-status')
+def get_batch_status():
+    """Get status of all batch processing tasks"""
+    try:
+        batch_stats = {
+            'total_tasks': len(processing_status),
+            'queued': len([s for s in processing_status.values() if s['status'] == 'queued']),
+            'processing': len([s for s in processing_status.values() if s['status'] == 'processing']),
+            'completed': len([s for s in processing_status.values() if s['status'] == 'completed']),
+            'failed': len([s for s in processing_status.values() if s['status'] == 'error']),
+            'queue_size': processing_queue.qsize(),
+            'tasks': list(processing_status.values())[:10]  # Return latest 10 tasks
+        }
+        
+        return jsonify(batch_stats)
+    
+    except Exception as e:
+        logger.error(f"Error getting batch status: {e}")
+        return jsonify({'error': 'Failed to get batch status'}), 500
+
+@app.route('/metrics')
+@rate_limit(limit=60, window=60)  # Standard rate limit for metrics
+def get_metrics():
+    """Get application metrics for monitoring"""
+    try:
+        # Processing metrics
+        processing_metrics = {
+            'total_files_processed': len(file_registry),
+            'active_processes': len([s for s in processing_status.values() if s['status'] == 'processing']),
+            'queue_length': processing_queue.qsize(),
+            'success_rate': 0
+        }
+        
+        # Calculate success rate
+        if processing_status:
+            successful = len([s for s in processing_status.values() if s['status'] == 'completed'])
+            total = len(processing_status)
+            processing_metrics['success_rate'] = round((successful / total) * 100, 2)
+        
+        # Storage metrics
+        processed_files = list(file_registry.values())
+        total_size = sum(f.get('file_size', 0) for f in processed_files)
+        
+        storage_metrics = {
+            'total_processed_files': len(processed_files),
+            'total_storage_mb': round(total_size / (1024 * 1024), 2),
+            'average_file_size_mb': round((total_size / len(processed_files)) / (1024 * 1024), 2) if processed_files else 0
+        }
+        
+        # System metrics (if psutil available)
+        system_metrics = {}
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            system_metrics = {
+                'cpu_usage': cpu_percent,
+                'memory_usage': memory.percent,
+                'memory_available_gb': round(memory.available / (1024**3), 2)
+            }
+        except:
+            system_metrics = {'error': 'psutil not available'}
+        
+        return jsonify({
+            'processing': processing_metrics,
+            'storage': storage_metrics,
+            'system': system_metrics,
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting metrics: {e}")
+        return jsonify({'error': 'Failed to get metrics'}), 500
 
 @socketio.on('connect')
 def handle_connect():
