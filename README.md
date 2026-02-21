@@ -1,414 +1,226 @@
-# 🎬 Open Video Watermark
+# Open Video Watermark
 
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Python](https://img.shields.io/badge/Python-3.12-green.svg)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Flask](https://img.shields.io/badge/Flask-2.3.3-red.svg)](https://flask.palletsprojects.com/)
 
-A robust, professional video watermarking web application that embeds invisible watermarks into video files using advanced frequency-domain DCT techniques. Built with modern web technologies and containerized for easy deployment.
+A Flask web application that embeds invisible watermarks into video files using frequency-domain DCT (Discrete Cosine Transform) techniques. Includes a web UI, a REST API, and real-time processing progress via WebSocket.
 
-## ✨ Features
+## Features
 
-### Core Functionality
-- **🔒 Invisible Watermarking**: Uses DCT (Discrete Cosine Transform) for robust frequency-domain watermarking (enhanced robustness in v1.0.0)
-- **🧪 Watermark Extraction**: Extract embedded watermarks from processed videos via API
-- **🌐 Modern Web Interface**: Clean, responsive single-page application with intuitive design
-- **⚡ Real-time Progress**: Live updates on video processing with WebSocket communication
-- **🔄 Background Processing**: Queue-based video processing to prevent UI blocking
-- **📁 File Management**: View, download, and delete processed files with organized interface
-- **🛡️ Robust Error Handling**: Graceful handling of invalid files and processing errors
+- **Invisible watermarking**: DCT-based frequency-domain embedding; watermarks are not visually apparent
+- **Watermark extraction**: Extract previously embedded watermarks via the `/extract` API endpoint
+- **Web interface**: Single-page application with drag-and-drop upload and a file manager
+- **Real-time progress**: Frame-by-frame processing updates pushed over WebSocket (Socket.IO)
+- **Background processing**: A queue-backed worker thread handles encoding without blocking the UI
+- **File management**: List, download, and delete processed files from the web UI or API
+- **Input validation**: Magic-number MIME checks, extension allow-listing, and OpenCV validation
+- **Rate limiting**: Per-endpoint request limits enforced in `security.py`
+- **Security headers**: CSP, HSTS, X-Frame-Options, and Referrer-Policy applied via middleware
+- **Docker support**: `Dockerfile` and `docker-compose.yml` provided; Nginx reverse-proxy config included
 
-### Advanced Features
-- **🎛️ Processing Options**: Customizable watermark strength and advanced settings
-- **📊 Progress Tracking**: Detailed progress bars with frame-by-frame updates
-- **🧰 Video Validation**: Comprehensive validation endpoint to preflight-check video files
-- **📈 Metrics & Monitoring**: Application metrics endpoint and system info for observability
-- **🧵 Batch & Queue**: Batch status endpoint for multi-file operations
-- **🔐 Security**: Rate limiting, input validation, secure headers, and safe file handling
-- **🐳 Docker Ready**: Full containerization with Docker Compose support
-- **🚀 Production Ready**: Nginx reverse proxy configuration included
-- **📱 Mobile Responsive**: Works seamlessly on desktop and mobile devices
+## Quick Start
 
-## 🚀 Quick Start
+### Docker (recommended)
 
-### Docker Deployment (Recommended)
-
-1. **Clone and setup**:
 ```bash
 git clone https://github.com/fabriziosalmi/open-video-watermark.git
 cd open-video-watermark
-make setup  # Creates .env file and directories
+make setup   # copies .env.example to .env and creates required directories
 ```
 
-2. **Configure environment**:
+Edit `.env` to set at least `SECRET_KEY`, then start the application:
+
 ```bash
-# Edit .env file with your settings
-cp .env.example .env
-nano .env
+make run         # development mode (port 8000)
+make production  # production mode with Nginx (port 80)
 ```
 
-3. **Start the application**:
+Access the UI at `http://localhost:8000` (development) or `http://localhost` (production).
+
+### Manual installation
+
+**System dependencies (Ubuntu/Debian):**
 ```bash
-# Development mode
-make run
-
-# Production mode with Nginx
-make production
-```
-
-4. **Access the application**:
-   - Development: http://localhost:8000
-   - Production: http://localhost (port 80)
-
-### Manual Installation
-
-1. **Prerequisites**:
-```bash
-# Python 3.12+ required
-python --version
-
-# Install system dependencies (Ubuntu/Debian)
 sudo apt update
 sudo apt install python3-dev python3-pip libgl1-mesa-glx libglib2.0-0
 ```
 
-2. **Setup application**:
+**Application setup:**
 ```bash
 git clone https://github.com/fabriziosalmi/open-video-watermark.git
 cd open-video-watermark
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-3. **Run application**:
-```bash
+cp .env.example .env       # then edit .env
 python app.py
-# Access at http://localhost:8000
 ```
 
-## 📖 Usage Guide
-
-### Basic Watermarking
-
-1. **Upload Videos**: 
-   - Navigate to the "Embed Watermark" tab
-   - Drag & drop or select video files (MP4, AVI, MOV, etc.)
-   - Supported formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM
-
-2. **Configure Watermark**:
-   - Enter your watermark text (up to 50 characters)
-   - Adjust watermark strength (0.05 - 0.3)
-   - Configure advanced options (optional)
-
-3. **Process Videos**:
-   - Click "Process Videos" to start
-   - Monitor real-time progress
-   - Receive notifications on completion
-
-4. **Manage Files**:
-   - Switch to "Manage Files" tab
-   - Download processed videos
-   - Delete unwanted files
-
-### Advanced Options
-
-- **Watermark Strength**: Controls embedding intensity
-  - Low (0.05-0.1): Subtle, harder to detect
-  - Medium (0.1-0.2): Balanced visibility/robustness
-  - High (0.2-0.3): Strong, more detectable
-
-- **Block Size**: DCT block size for processing (default: 8x8)
-- **Frame Sampling**: Processing frame rate control
-
-## 🐳 Docker Configuration
-
-### Services
-
-- **video-watermark**: Main application container
-- **nginx**: Reverse proxy (production profile)
-
-### Environment Variables
-
-```bash
-# Security
-SECRET_KEY=your-very-secure-secret-key
-
-# Application
-FLASK_ENV=production
-HOST=0.0.0.0
-PORT=8000
-
-# File limits
-MAX_CONTENT_LENGTH=524288000  # 500MB
-MAX_WATERMARK_LENGTH=50
-
-# Processing
-DEFAULT_STRENGTH=0.1
-BLOCK_SIZE=8
-```
-
-### Volume Mounts
-
-- `./uploads:/app/uploads` - Uploaded videos
-- `./processed:/app/processed` - Processed videos  
-- `./logs:/app/logs` - Application logs
-
-## 🛠️ Development
-
-### Prerequisites
-
-- Python 3.12+
-- Docker & Docker Compose (for containerized development)
-- Make (optional, for convenience commands)
-
-### Setup Development Environment
-
-```bash
-# Clone repository
-git clone https://github.com/fabriziosalmi/open-video-watermark.git
-cd open-video-watermark
-
-# Setup environment
-make setup
-make install
-
-# Run in development mode
-make dev
-```
-
-### Available Make Commands
-
-```bash
-make help        # Show all available commands
-make build       # Build Docker image
-make run         # Run in development
-make production  # Run with production setup
-make test        # Run tests
-make logs        # View application logs
-make clean       # Clean Docker resources
-```
-
-### Testing
-
-New comprehensive tests are included for v1.0.0.
-
-- Run all tests:
-```bash
-make test
-```
-
-- Run the comprehensive suite directly:
-```bash
-pytest -q tests/test_comprehensive.py
-```
-
-- With coverage:
-```bash
-pytest --cov=watermark tests/
-```
-
-```bash
-# Run tests
-make test
-
-# With coverage
-pytest --cov=watermark tests/
-
-# Manual testing
-python test_watermark.py
-```
-
-## 📂 Project Structure
-
-```
-open-video-watermark/
-├── app.py                  # Main Flask application
-├── config.py              # Configuration settings
-├── requirements.txt       # Python dependencies
-├── Dockerfile             # Docker image definition
-├── docker-compose.yml     # Multi-container setup
-├── nginx.conf             # Nginx configuration
-├── Makefile              # Development commands
-├── watermark/            # Core watermarking modules
-│   ├── __init__.py
-│   ├── dct_watermark.py  # DCT watermarking implementation
-│   └── video_processor.py # Video processing utilities
-├── static/               # Frontend assets
-│   ├── css/
-│   │   └── style.css    # Application styles
-│   └── js/
-│       └── app.js       # Frontend JavaScript
-├── templates/            # HTML templates
-│   └── index.html       # Main application template
-├── uploads/             # Uploaded video files
-├── processed/           # Processed video files
-├── logs/               # Application logs
-└── tests/              # Test files
-    └── test_watermark.py
-```
-
-## 🔧 Technical Details
-
-### Backend Architecture
-
-- **Framework**: Flask 2.3.3 with SocketIO for real-time communication
-- **Video Processing**: OpenCV 4.8.1 for frame manipulation
-- **Watermarking**: Enhanced DCT-based frequency-domain embedding with redundancy and improved robustness
-- **Queue System**: Threading-based background processing
-- **File Handling**: Secure upload/download with validation
-- **APIs**: New endpoints for extraction, validation, metrics, and batch status
-
-### Frontend Technology
-
-- **UI**: Modern responsive design with CSS Grid/Flexbox
-- **JavaScript**: ES6+ with WebSocket support
-- **Real-time Updates**: Socket.IO client for live progress
-- **File Handling**: Drag & drop interface with preview
-
-### Security Features
-
-- Input validation and sanitization
-- Secure filename handling
-- Rate limiting (application-level and via Nginx)
-- Security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy)
-- Content-Type validation (magic number checks)
-- File size limits
-
-See SECURITY.md and the new security middleware in security.py.
-
-### Performance Optimizations
-
-- Background video processing
-- Efficient DCT implementation
-- Memory management for large files
-- Progress streaming
-- Docker multi-stage builds
-
-## 🔐 Security Considerations
-
-### For Production Deployment
-
-- Set a strong SECRET_KEY and RATE_LIMIT_SALT in your environment.
-- Consider setting CORS_ORIGINS to a restricted list.
-- Run behind a reverse proxy with SSL/TLS.
-- Review API.md for endpoint rate limits and expected payloads.
-
-1. **Change default secret key**:
-```bash
-# Generate secure secret key
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-
-2. **Configure reverse proxy**:
-   - Use the included Nginx configuration
-   - Enable SSL/TLS certificates
-   - Configure rate limiting
-
-3. **File system security**:
-   - Run container as non-root user
-   - Mount volumes with appropriate permissions
-   - Regular cleanup of processed files
-
-4. **Network security**:
-   - Use Docker networks
-   - Limit exposed ports
-   - Configure firewall rules
-
-## 📊 Performance
-
-### Benchmarks
-
-- **Processing Speed**: ~30 FPS for 1080p video (on modern hardware)
-- **Memory Usage**: ~500MB base + ~100MB per concurrent video
-- **Storage**: Processed videos ~same size as originals
-- **Scalability**: Supports multiple concurrent processing tasks
-
-### System Requirements
-
-**Minimum**:
-- CPU: 2 cores, 2.0 GHz
-- RAM: 2GB available
-- Storage: 10GB for application + video storage
-- Network: 100 Mbps for large file uploads
-
-**Recommended**:
-- CPU: 4+ cores, 3.0+ GHz  
-- RAM: 8GB+ available
-- Storage: SSD with 50GB+ free space
-- Network: 1 Gbps
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
-
-### Code Standards
-
-- Follow PEP 8 for Python code
-- Use Black for code formatting
-- Add docstrings for new functions
-- Include unit tests for new features
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- OpenCV community for video processing capabilities
-- Flask team for the excellent web framework
-- Socket.IO for real-time communication
-- DCT watermarking research community
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/fabriziosalmi/open-video-watermark/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/fabriziosalmi/open-video-watermark/discussions)
-- **Security**: Report security issues privately via email
-
-## 📡 API Overview
-
-A full API reference with examples is available in API.md.
-
-Quick examples:
-
-- Extract watermark from a video:
+The server starts on `http://localhost:8000`.
+
+## Usage
+
+### Web interface
+
+1. Open `http://localhost:8000` in a browser.
+2. On the **Embed Watermark** tab, drag and drop or select one or more video files.
+3. Enter watermark text (up to 50 characters) and choose a strength value (0.05–0.3).
+4. Click **Process Videos** and watch the per-file progress bars update in real time.
+5. Switch to the **Manage Files** tab to download or delete processed files.
+
+### Watermark strength
+
+| Range | Effect |
+|-------|--------|
+| 0.05–0.1 | Low — minimal perceptual impact, less robust to re-encoding |
+| 0.1–0.2 | Medium — balanced (default: 0.1) |
+| 0.2–0.3 | High — more detectable visually, more robust to re-encoding |
+
+### Supported formats
+
+MP4, AVI, MOV, MKV, WMV, FLV, WebM
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust as needed. All values are optional except `SECRET_KEY` in production.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | auto-generated | Flask session secret; set explicitly in production |
+| `DEBUG` | `false` | Enable Flask debug mode |
+| `HOST` | `0.0.0.0` | Bind address |
+| `PORT` | `8000` | Listen port |
+| `CORS_ORIGINS` | `*` | Comma-separated allowed origins, or `*` |
+| `MAX_FILE_SIZE_MB` | `500` | Maximum upload size in MB |
+| `MAX_WATERMARK_LENGTH` | `50` | Maximum watermark text length |
+| `DEFAULT_STRENGTH` | `0.1` | Default embedding strength |
+| `MIN_STRENGTH` | `0.05` | Minimum allowed strength |
+| `MAX_STRENGTH` | `0.3` | Maximum allowed strength |
+| `BLOCK_SIZE` | `8` | DCT block size |
+| `FRAME_SAMPLE_RATE` | `30` | Frame sampling interval used during extraction |
+| `LOG_LEVEL` | `INFO` | Python logging level |
+| `LOG_FILE` | `logs/app.log` | Log file path |
+
+### Docker volumes
+
+| Host path | Container path | Purpose |
+|-----------|---------------|---------|
+| `./uploads` | `/app/uploads` | Temporary uploaded files |
+| `./processed` | `/app/processed` | Watermarked output files |
+| `./logs` | `/app/logs` | Application logs |
+
+## API
+
+Full endpoint documentation with request/response examples is in [API.md](API.md).
+
+Quick reference:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/system/info` | System and application info |
+| `GET` | `/metrics` | Processing and storage metrics |
+| `POST` | `/upload` | Upload videos for watermarking |
+| `GET` | `/status/<task_id>` | Processing status for a task |
+| `POST` | `/extract` | Extract watermark from a video |
+| `POST` | `/validate` | Validate a video file |
+| `POST` | `/estimate-time` | Estimate processing time |
+| `GET` | `/files` | List processed files |
+| `GET` | `/download/<file_id>` | Download a processed file |
+| `DELETE` | `/delete/<file_id>` | Delete a processed file |
+| `GET` | `/queue/status` | Processing queue stats |
+| `GET` | `/batch-status` | Status of all tasks (latest 10) |
+
+Example — extract a watermark:
 ```bash
 curl -X POST http://localhost:8000/extract \
   -F "file=@watermarked_video.mp4" \
   -F "watermark_length=15"
 ```
 
-- Validate a video file:
-```bash
-curl -X POST http://localhost:8000/validate \
-  -F "file=@video.mp4"
+## Project Structure
+
+```
+open-video-watermark/
+├── app.py                   # Flask application and routes
+├── config.py                # Configuration (reads from environment)
+├── security.py              # Rate limiting and security middleware
+├── requirements.txt         # Python dependencies
+├── Dockerfile               # Docker image definition
+├── docker-compose.yml       # Multi-container setup
+├── nginx.conf               # Nginx reverse-proxy configuration
+├── Makefile                 # Development convenience commands
+├── .env.example             # Environment variable template
+├── watermark/
+│   ├── dct_watermark.py     # DCT watermarking algorithm
+│   └── video_processor.py   # Video I/O and frame processing
+├── static/
+│   ├── css/style.css
+│   └── js/app.js
+├── templates/
+│   └── index.html
+├── uploads/                 # Runtime: uploaded files (git-ignored)
+├── processed/               # Runtime: watermarked files (git-ignored)
+├── logs/                    # Runtime: log files (git-ignored)
+└── tests/
+    └── test_comprehensive.py
 ```
 
-- Estimate processing time:
+## Development
+
+### Make commands
+
 ```bash
-curl -X POST http://localhost:8000/estimate-time \
-  -F "file=@video.mp4" \
-  -F "watermark_text=My Watermark"
+make help        # List all commands
+make setup       # Copy .env.example and create runtime directories
+make install     # pip install -r requirements.txt
+make dev         # Run locally with python app.py
+make build       # Build Docker image
+make run         # Start containers (development)
+make production  # Start containers with Nginx (production profile)
+make stop        # Stop containers
+make logs        # Tail application logs
+make shell       # Open a shell in the running container
+make test        # Run tests with pytest and coverage
+make lint        # Run flake8
+make format      # Run black
+make clean       # Remove containers, images, and volumes
 ```
 
-## 📝 Changelog
+### Running tests
 
-See CHANGELOG.md for a detailed list of changes. Latest release: v1.0.0.
+```bash
+make test
+# or directly:
+pytest -v --cov=watermark tests/
+```
 
----
+## Security
 
-**Made with ❤️ for the open source community**
+For a production deployment:
+
+- Set a strong `SECRET_KEY` in `.env`:
+  ```bash
+  python -c "import secrets; print(secrets.token_hex(32))"
+  ```
+- Set `CORS_ORIGINS` to your actual domain(s) instead of `*`.
+- Run behind a reverse proxy with TLS; the included `nginx.conf` can be used as a starting point.
+- Run the container as a non-root user.
+- Schedule regular cleanup of the `uploads/` and `processed/` directories.
+
+See [SECURITY.md](SECURITY.md) for more details.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+1. Fork the repository and create a feature branch.
+2. Make changes and add or update tests as appropriate.
+3. Run `make lint` and `make test` to verify.
+4. Open a pull request.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
