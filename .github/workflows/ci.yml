@@ -1,0 +1,61 @@
+name: CI
+
+# Questo repository non aveva nessun workflow sulle pull request: in
+# .github/workflows/ c'era solo docs.yml, legato al push su main. I test in
+# tests/ non venivano eseguiti da nessuna parte, e uno dei 37 era rotto da
+# tempo senza che se ne accorgesse nessuno.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # 3.12 come il Dockerfile (python:3.12-slim).
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # Librerie di sistema, ridotte al minimo che serve per importare cv2:
+      # senza libglib2.0-0 l'import muore con
+      # "ImportError: libgthread-2.0.so.0: cannot open shared object file",
+      # e la raccolta dei test si ferma prima di iniziare. Il Dockerfile ne
+      # installa molte di piu' (gstreamer, libav) perche' gli servono a
+      # processare i video davvero: qui i test non lo fanno.
+      #
+      # gcc serve perche' psutil e' fissato a 5.9.5, che non ha una ruota per
+      # Python 3.12 e viene compilato a ogni installazione.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1 libglib2.0-0 libmagic1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # `pytest tests/`, cioe' quello che fa `make test`. Il test_watermark.py
+      # in radice e' uno script che genera video veri: non e' fra i test che il
+      # progetto esegue, e metterlo qui vorrebbe dire far produrre filmati a
+      # ogni pull request.
+      - name: Run the test suite
+        run: python -m pytest tests/ -q
