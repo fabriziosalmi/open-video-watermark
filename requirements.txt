@@ -3,7 +3,7 @@ Flask==3.1.3
 Flask-SocketIO==5.3.6
 python-socketio[client]==5.8.0
 python-engineio==4.7.1
-Werkzeug==3.0.6
+Werkzeug==3.1.6
 
 # Video processing
 opencv-python==4.8.1.78
@@ -14,11 +14,11 @@ Pillow>=9.0.0
 psutil==5.9.5
 
 # Environment and utilities
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 python-magic==0.4.27
 
 # Video downloading
-yt-dlp==2023.12.30
+yt-dlp==2026.6.9
 
 # Production server options
 gevent==23.9.1
@@ -26,7 +26,7 @@ gevent-websocket==0.10.1
 gunicorn==23.0.0
 
 # Development and testing (optional)
-pytest==7.4.2
+pytest==9.0.3
 pytest-cov==4.1.0
-black==24.3.0
+black==26.3.1
 flake8==6.1.0

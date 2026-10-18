@@ -295,15 +295,29 @@ class TestFlaskApp:
         assert 'error' in data
     
     def test_upload_empty_watermark(self, client):
-        """Test upload with empty watermark text"""
-        response = client.post('/upload', data={
-            'watermark_text': '',
-            'files': []
-        })
+        """Una filigrana vuota viene rifiutata.
+
+        Serve allegare un file: app.py controlla prima la presenza dei file
+        ("No files selected") e solo dopo la filigrana. Con 'files': [] la
+        chiave non arriva nemmeno in request.files, quindi questo test si
+        fermava al primo controllo e non raggiungeva mai la validazione della
+        filigrana che dichiara di provare, fallendo su
+        assert 'empty' in 'no files selected'.
+        """
+        response = client.post(
+            '/upload',
+            data={
+                'watermark_text': '',
+                'files': (BytesIO(b'contenuto finto'), 'prova.mp4'),
+            },
+            content_type='multipart/form-data',
+        )
         assert response.status_code == 400
         data = json.loads(response.data)
         assert 'error' in data
-        assert 'empty' in data['error'].lower()
+        assert 'empty' in data['error'].lower(), (
+            f"atteso un errore sulla filigrana vuota, ricevuto: {data['error']!r}"
+        )
     
     def test_upload_invalid_strength(self, client):
         """Test upload with invalid strength value"""

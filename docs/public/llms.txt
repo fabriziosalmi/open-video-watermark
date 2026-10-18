@@ -1,0 +1,27 @@
+# Open Video Watermark
+
+> Invisible video watermarking in Python using frequency-domain DCT techniques with REST API and Web UI.
+
+## Overview
+
+Open Video Watermark is an open-source project by Fabrizio Salmi (@fabriziosalmi). It enables embedding imperceptible, compression-resilient watermarks into video frames using Discrete Cosine Transform (DCT) in the frequency domain. It features an asynchronous background processing queue, real-time WebSocket progress updates, a modern single-page web UI, and a full RESTful API.
+
+## Core Capabilities
+
+- **DCT Frequency-Domain Watermarking**: Embeds watermarks in the middle frequencies of the luminance (Y) channel of video frames.
+- **REST API Endpoints**:
+  - `GET /health`: Healthcheck and system status.
+  - `POST /upload`: Upload video file and embed invisible watermark.
+  - `POST /extract`: Extract embedded watermark bitstream from a video.
+  - `GET /files`: List processed files.
+  - `GET /download/<filename>`: Download processed video.
+  - `DELETE /files/<filename>`: Delete file.
+- **WebSocket Streaming**: Frame-by-frame encoding progress emitted via Flask-SocketIO.
+- **Production Architecture**: Packaged with Docker, Docker Compose, Gunicorn, and Nginx.
+
+## Documentation Links
+
+- [Introduction](https://fabriziosalmi.github.io/open-video-watermark/guide/introduction): Architectural overview and DCT theory.
+- [Installation & Setup](https://fabriziosalmi.github.io/open-video-watermark/guide/installation): Docker and manual deployment steps.
+- [REST API Reference](https://fabriziosalmi.github.io/open-video-watermark/guide/api): Complete API documentation with request and response payloads.
+- [Changelog](https://fabriziosalmi.github.io/open-video-watermark/guide/changelog): Version release history and migration notes.

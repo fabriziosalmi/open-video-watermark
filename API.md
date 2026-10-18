@@ -390,10 +390,17 @@ socket.on('processing_update', (data) => {
 
 ## Rate Limits
 
-Currently no rate limiting is implemented. For production use, consider implementing:
-- File upload limits: 10 files per minute per IP
-- Processing queue limits: 5 concurrent tasks per user
-- API request limits: 100 requests per minute per IP
+Rate limiting is enforced at the application level in `security.py`. Default limits:
+
+| Endpoint | Limit |
+|----------|-------|
+| `POST /upload` | 10 requests per minute |
+| `POST /extract` | 5 requests per minute |
+| `POST /validate` | 20 requests per minute |
+| `POST /estimate-time` | 30 requests per minute |
+| `GET /metrics` | 60 requests per minute |
+
+When a limit is exceeded, the endpoint returns HTTP 429.
 
 ---
 
