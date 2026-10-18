@@ -18,7 +18,7 @@ python-dotenv==1.2.2
 python-magic==0.4.27
 
 # Video downloading
-yt-dlp==2026.6.9
+yt-dlp==2026.7.4
 
 # Production server options
 gevent==23.9.1
